@@ -1,6 +1,7 @@
 package com.example.mylocalcanvas.ui.home
 
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
@@ -8,7 +9,10 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.example.mylocalcanvas.R
 import com.example.mylocalcanvas.ui.components.BouncyButton
 import com.example.mylocalcanvas.ui.components.BouncyOutlinedButton
 import androidx.compose.foundation.layout.width
@@ -26,10 +30,14 @@ fun HomeScreen(
             // 整个页面上下左右边距统一压缩一些
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // ① 顶部 App 名称：改成紧凑的标题，不再占一大块区域
-        Text(
-            text = "LocalCanvas",
-            style = MaterialTheme.typography.titleMedium
+        // ① 顶部 App Logo：使用图片代替文字
+        Image(
+            painter = painterResource(id = R.drawable.homepage),
+            contentDescription = "LocalCanvas Logo",
+            modifier = Modifier
+                .height(32.dp) // 设置合适的高度
+                .width(120.dp), // 设置宽度，保持图片比例
+            contentScale = ContentScale.Fit
         )
 
         Spacer(Modifier.height(12.dp))
