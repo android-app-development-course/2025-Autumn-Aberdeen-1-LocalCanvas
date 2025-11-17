@@ -7,7 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -16,6 +16,9 @@ import com.example.mylocalcanvas.R
 import com.example.mylocalcanvas.ui.components.BouncyButton
 import com.example.mylocalcanvas.ui.components.BouncyOutlinedButton
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,84 +27,131 @@ fun HomeScreen(
     onStartMaskEdit: () -> Unit,
     onOpenGallery: () -> Unit
 ) {
-    Column(
+    // 底部弹出卡片的状态
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showBottomSheet by remember { mutableStateOf(false) }
+
+    // 底部弹出卡片内容
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            ActionOptionsSheet(
+                onStartMaskEdit = {
+                    showBottomSheet = false
+                    onStartMaskEdit()
+                },
+                onOpenGallery = {
+                    showBottomSheet = false
+                    onOpenGallery()
+                },
+                onDismiss = { showBottomSheet = false }
+            )
+        }
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            // 整个页面上下左右边距统一压缩一些
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // ① 顶部 App Logo：使用图片代替文字
-        Image(
-            painter = painterResource(id = R.drawable.homepage),
-            contentDescription = "LocalCanvas Logo",
-            modifier = Modifier
-                .height(32.dp) // 设置合适的高度
-                .width(120.dp), // 设置宽度，保持图片比例
-            contentScale = ContentScale.Fit
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        // ② 主标题区域：稍微大一点，但只占很小的高度
-        Text(
-            text = "您好：Caleb",
-            style = MaterialTheme.typography.headlineMedium
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        Text(
-            text = "拍摄或导入图片，使用用遮罩和 AI 工作流进行自由艺术创作。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // ③ 主操作按钮区（保持你之前的两个按钮 + 弹跳动效）
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            BouncyButton(
-                onClick = onStartMaskEdit,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("拍摄")
-            }
+            // ① 顶部 App Logo：使用图片代替文字
+            Image(
+                painter = painterResource(id = R.drawable.localcanvas4),
+                contentDescription = "LocalCanvas Logo",
+                modifier = Modifier
+                    .height(120.dp)
+                    .width(360.dp),
+                contentScale = ContentScale.Fit
+            )
 
-            BouncyOutlinedButton(
-                onClick = onStartMaskEdit,
-                modifier = Modifier.weight(1f)
+            Spacer(Modifier.height(32.dp))
+
+            // ② 主标题区域：稍微大一点，但只占很小的高度
+            Text(
+                text = "您好：Caleb",
+                style = MaterialTheme.typography.headlineMedium
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                text = "拍摄或导入图片，使用用遮罩和 AI 工作流进行自由艺术创作。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(32.dp))
+
+            // ③ 触发底部弹出卡片的按钮
+            BouncyButton(
+                onClick = { showBottomSheet = true },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Image, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("导入")
+                Text("开始创作")
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(32.dp))
+/**
+ * 底部弹出卡片内容：包含拍摄、导入、打开图库三个操作
+ */
+@Composable
+private fun ActionOptionsSheet(
+    onStartMaskEdit: () -> Unit,
+    onOpenGallery: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 卡片标题
 
-        // ④ 最近作品标题
-        Text(
-            text = "最近作品",
-            style = MaterialTheme.typography.titleSmall
-        )
 
-        Spacer(Modifier.height(12.dp))
+        // 拍摄按钮
+        BouncyButton(
+            onClick = onStartMaskEdit,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.CameraAlt, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("拍摄")
+        }
 
-        // ⑤ 打开图库按钮（保持你之前的样式）
+        // 导入按钮
+        BouncyOutlinedButton(
+            onClick = onStartMaskEdit,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Image, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("导入")
+        }
+
+        // 打开图库按钮
         OutlinedButton(
             onClick = onOpenGallery,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(48.dp)
         ) {
             Text("打开我的图库")
         }
 
-        // 下面的空间就留给将来要加的“最近几张缩略图”等
+        // 底部留白，避免被系统导航栏遮挡
+        Spacer(Modifier.height(16.dp))
     }
 }
