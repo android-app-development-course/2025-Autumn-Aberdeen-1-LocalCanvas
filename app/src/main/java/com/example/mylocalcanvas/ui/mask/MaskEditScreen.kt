@@ -69,16 +69,7 @@ fun MaskEditScreen(
                 }
             }
 
-            // 右上角“下一步”快捷入口
-            Text(
-                text = "下一步",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            )
+
         }
 
         Spacer(Modifier.height(8.dp))
