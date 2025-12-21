@@ -16,11 +16,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,50 +25,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import com.example.mylocalcanvas.ui.common.LocalCanvasScreen
-
-
-enum class TaskStatus {
-    RUNNING,
-    COMPLETED,
-    FAILED
-}
-
-data class TaskItem(
-    val id: String,
-    val title: String,
-    val subtitle: String,
-    val timeInfo: String,
-    val status: TaskStatus
-)
+import com.example.mylocalcanvas.data.TaskHistoryItem
+import com.example.mylocalcanvas.data.TaskHistoryStore
+import com.example.mylocalcanvas.data.TaskStatus
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen() {
-    // 假数据：展示不同状态的任务
-    val tasks = remember {
-        listOf(
-            TaskItem(
-                id = "t1",
-                title = "梦幻城市重构",
-                subtitle = "全局重构 · 步数 30 · 强度 80%",
-                timeInfo = "正在生成 · 预计还需 20 秒",
-                status = TaskStatus.RUNNING
-            ),
-            TaskItem(
-                id = "t2",
-                title = "街景局部修复",
-                subtitle = "本地增强 · 步数 25 · 强度 60%",
-                timeInfo = "完成于 2025-11-16 14:32",
-                status = TaskStatus.COMPLETED
-            ),
-            TaskItem(
-                id = "t3",
-                title = "人像艺术风格化",
-                subtitle = "全局重构 · 步数 40 · 强度 90%",
-                timeInfo = "失败：网络断开，请稍后重试",
-                status = TaskStatus.FAILED
-            )
-        )
+fun HistoryScreen(
+    onOpenResult: (String) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var tasks by remember { mutableStateOf<List<TaskHistoryItem>>(emptyList()) }
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            tasks = TaskHistoryStore.load(context)
+        }
     }
 
     // ✅ 统一使用 LocalCanvasScreen，和首页/图库一致
@@ -99,7 +76,10 @@ fun HistoryScreen() {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(tasks) { task ->
-                TaskCard(task = task)
+                TaskCard(
+                    task = task,
+                    onOpenResult = onOpenResult
+                )
             }
             item { Spacer(Modifier.height(16.dp)) }
         }
@@ -108,7 +88,10 @@ fun HistoryScreen() {
 }
 
 @Composable
-private fun TaskCard(task: TaskItem) {
+private fun TaskCard(
+    task: TaskHistoryItem,
+    onOpenResult: (String) -> Unit
+) {
     val (icon, statusText, statusColor) = when (task.status) {
         TaskStatus.RUNNING -> Triple(
             Icons.Default.Schedule,
@@ -127,7 +110,21 @@ private fun TaskCard(task: TaskItem) {
         )
     }
 
+    val subtitle = "${task.workflowType} · 步数 ${task.steps} · 强度 ${task.strength}%"
+    val timeText = formatTime(task.timeMillis)
+    val timeInfo = when (task.status) {
+        TaskStatus.RUNNING -> "正在生成"
+        TaskStatus.COMPLETED -> "完成于 $timeText"
+        TaskStatus.FAILED -> "失败于 $timeText"
+    }
+
     Card(
+        onClick = {
+            if (task.status == TaskStatus.COMPLETED && !task.resultUrl.isNullOrBlank()) {
+                onOpenResult(task.resultUrl)
+            }
+        },
+        enabled = task.status == TaskStatus.COMPLETED && !task.resultUrl.isNullOrBlank(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -172,14 +169,14 @@ private fun TaskCard(task: TaskItem) {
 
             // 第二行：配置说明
             Text(
-                text = task.subtitle,
+                text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             // 第三行：时间 / 错误信息
             Text(
-                text = task.timeInfo,
+                text = timeInfo,
                 style = MaterialTheme.typography.bodySmall
             )
 
@@ -198,4 +195,9 @@ private fun TaskCard(task: TaskItem) {
             }
         }
     }
+}
+
+private fun formatTime(timeMillis: Long): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return formatter.format(Date(timeMillis))
 }

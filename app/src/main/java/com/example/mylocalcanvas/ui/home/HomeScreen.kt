@@ -19,14 +19,35 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.example.mylocalcanvas.util.saveBitmapToCache
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onStartMaskEdit: () -> Unit,
+    onImageSelected: (android.net.Uri) -> Unit,
     onOpenGallery: () -> Unit
 ) {
+    val context = LocalContext.current
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            onImageSelected(uri)
+        }
+    }
+    val takePreviewLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val uri = saveBitmapToCache(context, bitmap)
+            onImageSelected(uri)
+        }
+    }
+
     // 底部弹出卡片的状态
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -39,15 +60,18 @@ fun HomeScreen(
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
             ActionOptionsSheet(
-                onStartMaskEdit = {
+                onCapture = {
                     showBottomSheet = false
-                    onStartMaskEdit()
+                    takePreviewLauncher.launch(null)
+                },
+                onPickImage = {
+                    showBottomSheet = false
+                    pickImageLauncher.launch("image/*")
                 },
                 onOpenGallery = {
                     showBottomSheet = false
                     onOpenGallery()
-                },
-                onDismiss = { showBottomSheet = false }
+                }
             )
         }
     }
@@ -108,9 +132,9 @@ fun HomeScreen(
  */
 @Composable
 private fun ActionOptionsSheet(
-    onStartMaskEdit: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onDismiss: () -> Unit
+    onCapture: () -> Unit,
+    onPickImage: () -> Unit,
+    onOpenGallery: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -123,7 +147,7 @@ private fun ActionOptionsSheet(
 
         // 拍摄按钮
         BouncyButton(
-            onClick = onStartMaskEdit,
+            onClick = onCapture,
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.CameraAlt, contentDescription = null)
@@ -133,7 +157,7 @@ private fun ActionOptionsSheet(
 
         // 导入按钮
         BouncyOutlinedButton(
-            onClick = onStartMaskEdit,
+            onClick = onPickImage,
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.Image, contentDescription = null)

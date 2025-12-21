@@ -16,6 +16,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val siliconflowApiKey = project.findProperty("SILICONFLOW_API_KEY") as String? ?: ""
+        buildConfigField("String", "SILICONFLOW_API_KEY", "\"$siliconflowApiKey\"")
     }
 
     buildTypes {
@@ -36,6 +39,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -55,6 +59,15 @@ dependencies {
 
 // Material 图标（Icons.Default.xxx）
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Networking + JSON
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Image loading
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

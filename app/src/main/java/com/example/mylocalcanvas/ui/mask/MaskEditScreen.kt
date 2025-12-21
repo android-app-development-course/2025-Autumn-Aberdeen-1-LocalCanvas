@@ -1,6 +1,8 @@
 package com.example.mylocalcanvas.ui.mask
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,27 +12,46 @@ import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.mylocalcanvas.ui.common.LocalCanvasScreen
 import com.example.mylocalcanvas.ui.components.BouncyButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import coil.compose.AsyncImage
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import android.net.Uri
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.Canvas as AndroidCanvas
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 
 @Composable
 fun MaskEditScreen(
     onBack: () -> Unit = {},
+    inputImageUri: Uri?,
+    inputImageRes: Int,
+    onMaskReady: (String?) -> Unit = {},
     onNext: () -> Unit = {}
 ) {
+    val strokes = remember { mutableStateListOf<List<Offset>>() }
+    var currentStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    var brushSize by remember { mutableStateOf(28f) }
+    var showMask by remember { mutableStateOf(true) }
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
     LocalCanvasScreen {
 
         // 顶部标题 + 返回 / 下一步
@@ -74,7 +95,7 @@ fun MaskEditScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // 图片 + 遮罩画布区域（占位）
+        // 图片 + 遮罩画布区域
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -83,11 +104,43 @@ fun MaskEditScreen(
                 .background(Color(0xFF222222)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "这里是图片和遮罩画布\n（后面可以扩展为真正的画笔）",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+            AsyncImage(
+                model = inputImageUri ?: inputImageRes,
+                contentDescription = "待编辑图片",
+                modifier = Modifier.fillMaxSize()
             )
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onSizeChanged { canvasSize = it }
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                currentStroke = listOf(offset)
+                            },
+                            onDrag = { change, _ ->
+                                currentStroke = currentStroke + change.position
+                            },
+                            onDragEnd = {
+                                if (currentStroke.isNotEmpty()) {
+                                    strokes.add(currentStroke)
+                                }
+                                currentStroke = emptyList()
+                            },
+                            onDragCancel = {
+                                currentStroke = emptyList()
+                            }
+                        )
+                    }
+            ) {
+                if (showMask) {
+                    val paintColor = Color(0xFF7C4DFF).copy(alpha = 0.45f)
+                    strokes.forEach { points ->
+                        drawStroke(points, brushSize, paintColor)
+                    }
+                    drawStroke(currentStroke, brushSize, paintColor)
+                }
+            }
         }
 
         Spacer(Modifier.height(20.dp))
@@ -111,36 +164,55 @@ fun MaskEditScreen(
                 icon = Icons.Default.Brush,
                 label = "画笔"
             ) {
-                // TODO: 切换到画笔模式
+                showMask = true
             }
 
             MaskToolButton(
                 icon = Icons.Default.Visibility,
                 label = "预览"
             ) {
-                // TODO: 显示/隐藏遮罩
+                showMask = !showMask
             }
 
             MaskToolButton(
                 icon = Icons.Default.Undo,
                 label = "撤销"
             ) {
-                // TODO: 撤销上一步
+                if (strokes.isNotEmpty()) {
+                    strokes.removeAt(strokes.size - 1)
+                }
             }
 
             MaskToolButton(
                 icon = Icons.Default.Delete,
                 label = "清除"
             ) {
-                // TODO: 清除当前遮罩
+                strokes.clear()
+                currentStroke = emptyList()
             }
         }
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "笔刷大小：${brushSize.toInt()}",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Slider(
+            value = brushSize,
+            onValueChange = { brushSize = it },
+            valueRange = 8f..64f
+        )
 
         Spacer(Modifier.height(20.dp))
 
         // 底部主按钮
         BouncyButton(
-            onClick = onNext,
+            onClick = {
+                val maskBase64 = createMaskBase64(strokes, canvasSize, brushSize)
+                onMaskReady(maskBase64)
+                onNext()
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("下一步：选择 AI 工作流")
@@ -177,4 +249,64 @@ private fun MaskToolButton(
             style = MaterialTheme.typography.bodySmall
         )
     }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStroke(
+    points: List<Offset>,
+    brushSize: Float,
+    color: Color
+) {
+    if (points.size < 2) return
+    val path = Path().apply { moveTo(points.first().x, points.first().y) }
+    for (point in points.drop(1)) {
+        path.lineTo(point.x, point.y)
+    }
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(
+            width = brushSize,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
+    )
+}
+
+private fun createMaskBase64(
+    strokes: List<List<Offset>>,
+    canvasSize: IntSize,
+    brushSize: Float
+): String? {
+    if (strokes.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return null
+
+    val bitmap = Bitmap.createBitmap(
+        canvasSize.width,
+        canvasSize.height,
+        Bitmap.Config.ARGB_8888
+    )
+    val canvas = AndroidCanvas(bitmap)
+    val paint = Paint().apply {
+        color = android.graphics.Color.WHITE
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        strokeWidth = brushSize
+        isAntiAlias = true
+    }
+
+    for (stroke in strokes) {
+        if (stroke.size < 2) continue
+        val path = android.graphics.Path().apply {
+            moveTo(stroke.first().x, stroke.first().y)
+            for (point in stroke.drop(1)) {
+                lineTo(point.x, point.y)
+            }
+        }
+        canvas.drawPath(path, paint)
+    }
+
+    val outputStream = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+    val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+    return "data:image/png;base64,$base64"
 }

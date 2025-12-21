@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.net.Uri
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -73,6 +74,13 @@ data class BottomNavItem(
 @Composable
 fun LocalCanvasApp() {
     val navController = rememberNavController()
+    var resultUrl by remember { mutableStateOf<String?>(null) }
+    val inputImageRes = remember { R.drawable.homepage }
+    var inputImageUri by remember { mutableStateOf<Uri?>(null) }
+    var maskBase64 by remember { mutableStateOf<String?>(null) }
+    var lastWorkflowTypeId by remember { mutableStateOf<String?>(null) }
+    var lastStrength by remember { mutableStateOf<Int?>(null) }
+    var lastSteps by remember { mutableStateOf<Int?>(null) }
 
     val bottomItems = listOf(
         BottomNavItem(ROUTE_HOME, "创作", Icons.Default.Home),
@@ -98,7 +106,15 @@ fun LocalCanvasApp() {
         ) {
             composable(ROUTE_HOME) {
                 HomeScreen(
-                    onStartMaskEdit = {navController.navigate(ROUTE_MASK)},
+                    onImageSelected = { uri ->
+                        inputImageUri = uri
+                        resultUrl = null
+                        maskBase64 = null
+                        lastWorkflowTypeId = null
+                        lastStrength = null
+                        lastSteps = null
+                        navController.navigate(ROUTE_MASK)
+                    },
                     onOpenGallery = { navController.navigate(ROUTE_GALLERY) }
                 )
             }
@@ -107,6 +123,9 @@ fun LocalCanvasApp() {
             composable(ROUTE_MASK) {
                 MaskEditScreen(
                     onBack = { navController.popBackStack() },
+                    inputImageUri = inputImageUri,
+                    inputImageRes = inputImageRes,
+                    onMaskReady = { maskBase64 = it },
                     onNext = { navController.navigate(ROUTE_WORKFLOW) }
                 )
             }
@@ -115,7 +134,16 @@ fun LocalCanvasApp() {
             composable(ROUTE_WORKFLOW) {
                 WorkflowScreen(
                     onBack = { navController.popBackStack() },
-                    onGenerate = { navController.navigate(ROUTE_RESULT) }
+                    maskBase64 = maskBase64,
+                    inputImageUri = inputImageUri,
+                    inputImageRes = inputImageRes,
+                    onGenerate = { url, workflowTypeId, strength, steps ->
+                        resultUrl = url
+                        lastWorkflowTypeId = workflowTypeId
+                        lastStrength = strength
+                        lastSteps = steps
+                        navController.navigate(ROUTE_RESULT)
+                    }
                 )
             }
 
@@ -123,12 +151,26 @@ fun LocalCanvasApp() {
                 GalleryScreen()
             }
             composable(ROUTE_HISTORY) {
-                HistoryScreen()
+                HistoryScreen(
+                    onOpenResult = { url ->
+                        resultUrl = url
+                        lastWorkflowTypeId = null
+                        lastStrength = null
+                        lastSteps = null
+                        navController.navigate(ROUTE_RESULT)
+                    }
+                )
             }
 
 
             composable(ROUTE_RESULT) {
                 ResultScreen(
+                    inputImageRes = inputImageRes,
+                    inputImageUri = inputImageUri,
+                    resultUrl = resultUrl,
+                    workflowTypeId = lastWorkflowTypeId,
+                    strength = lastStrength,
+                    steps = lastSteps,
                     onBack = { navController.popBackStack() },
                     onSave = {
                         // 这里以后可以接入真正的保存逻辑
@@ -229,5 +271,3 @@ fun BottomNavBar(
 }
 
 // ------- 占位页面：图库 / 历史任务 -------
-
-

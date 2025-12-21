@@ -12,9 +12,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Button
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +23,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.graphics.graphicsLayer
 import com.example.mylocalcanvas.ui.components.BouncyButton
 import com.example.mylocalcanvas.ui.common.LocalCanvasScreen
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.TextFieldValue
+import com.example.mylocalcanvas.data.SiliconFlowRepository
+import com.example.mylocalcanvas.util.encodeDrawableToBase64
+import com.example.mylocalcanvas.util.encodeUriToBase64
+import kotlinx.coroutines.launch
+import android.net.Uri
+import com.example.mylocalcanvas.data.TaskHistoryItem
+import com.example.mylocalcanvas.data.TaskHistoryStore
+import com.example.mylocalcanvas.data.TaskStatus
+import java.util.UUID
 
 
 
@@ -38,7 +48,10 @@ data class WorkflowOption(
 @Composable
 fun WorkflowScreen(
     onBack: () -> Unit = {},
-    onGenerate: () -> Unit = {}
+    maskBase64: String?,
+    inputImageUri: Uri?,
+    inputImageRes: Int,
+    onGenerate: (String, String, Int, Int) -> Unit = { _, _, _, _ -> }
 ) {
     // 定义两个工作流选项
     val workflows = listOf(
@@ -58,6 +71,13 @@ fun WorkflowScreen(
     var strength by remember { mutableStateOf(0.7f) }
     var steps by remember { mutableStateOf(25f) }
     var useLora by remember { mutableStateOf(true) }
+    var prompt by remember { mutableStateOf(TextFieldValue("cinematic, soft light, high detail")) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val repository = remember { SiliconFlowRepository.instance }
 
     LocalCanvasScreen {
         Column(
@@ -129,6 +149,15 @@ fun WorkflowScreen(
                     )
                     Spacer(Modifier.height(8.dp))
 
+                    OutlinedTextField(
+                        value = prompt,
+                        onValueChange = { prompt = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Prompt（风格描述）") }
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
                     // 强度 Slider
                     Text("风格强度：${(strength * 100).toInt()}%")
                     Slider(
@@ -159,17 +188,98 @@ fun WorkflowScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("启用 LoRA / 高级风格模块")
                     }
+
+                    if (errorMessage != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = errorMessage ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
 
             // ===== 底部：开始生成按钮 =====
             BouncyButton(
-                onClick = onGenerate,
+                onClick = {
+                    if (isLoading) return@BouncyButton
+                    coroutineScope.launch {
+                        isLoading = true
+                        errorMessage = null
+                        val taskId = UUID.randomUUID().toString()
+                        val startTime = System.currentTimeMillis()
+                        TaskHistoryStore.upsert(
+                            context,
+                            TaskHistoryItem(
+                                id = taskId,
+                                title = if (selectedWorkflowId == "local") "本地增强工作流" else "全局重构工作流",
+                                workflowType = if (selectedWorkflowId == "local") "本地增强" else "全局重构",
+                                strength = (strength * 100).toInt(),
+                                steps = steps.toInt(),
+                                timeMillis = startTime,
+                                status = TaskStatus.RUNNING
+                            )
+                        )
+                        try {
+                            val imageBase64 = if (inputImageUri != null) {
+                                encodeUriToBase64(context, inputImageUri)
+                            } else {
+                                encodeDrawableToBase64(context, inputImageRes)
+                            }
+                            val url = repository.generateImage(prompt.text, imageBase64, maskBase64)
+                            TaskHistoryStore.upsert(
+                                context,
+                                TaskHistoryItem(
+                                    id = taskId,
+                                    title = if (selectedWorkflowId == "local") "本地增强工作流" else "全局重构工作流",
+                                    workflowType = if (selectedWorkflowId == "local") "本地增强" else "全局重构",
+                                    strength = (strength * 100).toInt(),
+                                    steps = steps.toInt(),
+                                    timeMillis = startTime,
+                                    status = TaskStatus.COMPLETED,
+                                    resultUrl = url
+                                )
+                            )
+                            onGenerate(
+                                url,
+                                selectedWorkflowId,
+                                (strength * 100).toInt(),
+                                steps.toInt()
+                            )
+                        } catch (e: Exception) {
+                            TaskHistoryStore.upsert(
+                                context,
+                                TaskHistoryItem(
+                                    id = taskId,
+                                    title = if (selectedWorkflowId == "local") "本地增强工作流" else "全局重构工作流",
+                                    workflowType = if (selectedWorkflowId == "local") "本地增强" else "全局重构",
+                                    strength = (strength * 100).toInt(),
+                                    steps = steps.toInt(),
+                                    timeMillis = startTime,
+                                    status = TaskStatus.FAILED
+                                )
+                            )
+                            errorMessage = e.message ?: "生成失败，请稍后重试"
+                        } finally {
+                            isLoading = false
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp, bottom = 8.dp)
             ) {
-                Text("开始生成结果预览")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("生成中...")
+                } else {
+                    Text("开始生成结果预览")
+                }
             }
         }
     }
